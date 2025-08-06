@@ -40,15 +40,15 @@ end
 
 -- Compile helper: source -> output (.o or exe)
 local function compile(source, output, is_executable)
-  local cmd = {"gcc", "-g", "-O0", "-fno-builtin"}
+  local parts = {"gcc", "-g", "-O0", "-fno-builtin"}
   if is_executable then
-    table.insert(cmd, "-o"); table.insert(cmd, output)
-    table.insert(cmd, source)
+    table.insert(parts, "-o"); table.insert(parts, output)
+    table.insert(parts, source)
   else
-    table.insert(cmd, "-c"); table.insert(cmd, source)
-    table.insert(cmd, "-o"); table.insert(cmd, output)
+    table.insert(parts, "-c"); table.insert(parts, source)
+    table.insert(parts, "-o"); table.insert(parts, output)
   end
-  return run_cmd(table.concat(cmd, " "))
+  return run_cmd(table.concat(parts, " "))
 end
 
 -- Disassemble object file (.o) with temp symbols
@@ -57,11 +57,10 @@ function M.disasmObj()
   local tmp_c, tmp_o = "/tmp/recursion_code.c", "/tmp/recursion_code.o"
   vim.cmd("write! " .. tmp_c)
   compile(tmp_c, tmp_o, false)
-  -- Use otool on macOS, objdump otherwise
   local file_info = run_cmd("file " .. tmp_o)
-  local asm_cmd = file_info:match("Mach%-O") and "otool -tvV " .. tmp_o
+  local cmd = file_info:match("Mach%-O") and "otool -tvV " .. tmp_o
                                            or "objdump -d -l -S " .. tmp_o
-  local asm = run_cmd(asm_cmd)
+  local asm = run_cmd(cmd)
   open_window("asm")
   vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(asm, "\n"))
   vim.api.nvim_buf_set_name(result_bufnr, name .. "-ObjDisasm")
@@ -75,48 +74,34 @@ function M.disasmExe()
   vim.cmd("write! " .. tmp_c)
   compile(tmp_c, tmp_exe, true)
   local file_info = run_cmd("file " .. tmp_exe)
-  local asm_cmd = file_info:match("Mach%-O") and "otool -tvV " .. tmp_exe
+  local cmd = file_info:match("Mach%-O") and "otool -tvV " .. tmp_exe
                                            or "objdump -d -l -S " .. tmp_exe
-  local asm = run_cmd(asm_cmd)
+  local asm = run_cmd(cmd)
   open_window("asm")
   vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(asm, "\n"))
   vim.api.nvim_buf_set_name(result_bufnr, name .. "-FullDisasm")
   finalize()
 end
 
--- Decompile object file (.o) to C using RetDec
-function M.decompileObj()
-  local name = vim.fn.expand("%:t:r")
-  local tmp_c, tmp_o = "/tmp/recursion_code.c", "/tmp/recursion_code.o"
-  local tmp_dc = "/tmp/recursion_code_obj_decompiled.c"
-  vim.cmd("write! " .. tmp_c)
-  compile(tmp_c, tmp_o, false)
-  local output = run_cmd("retdec-decompiler --keep-library-funcs --output " .. tmp_dc .. " " .. tmp_o)
-  if not vim.loop.fs_stat(tmp_dc) then
-    open_window("text")
-    vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(output, "\n"))
-    vim.api.nvim_buf_set_name(result_bufnr, name .. "-ObjDecompileError")
-    return finalize()
-  end
-  local dc = run_cmd("cat " .. tmp_dc)
-  open_window("c")
-  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(dc, "\n"))
-  vim.api.nvim_buf_set_name(result_bufnr, name .. "-ObjDecompiled")
-  finalize()
-end
-
--- Decompile full executable to C using RetDec
+-- Decompile full executable to C using RetDec (bin mode, keep library funcs, cleanup)
 function M.decompileExe()
   local name = vim.fn.expand("%:t:r")
-  local tmp_c, tmp_exe = "/tmp/recursion_code.c", "/tmp/recursion_code_exe"
-  local tmp_dc = "/tmp/recursion_code_exe_decompiled.c"
+  local tmp_c, tmp_exe, tmp_dc = "/tmp/recursion_code.c", "/tmp/recursion_code_exe", "/tmp/recursion_code_exe_decompiled.c"
   vim.cmd("write! " .. tmp_c)
   compile(tmp_c, tmp_exe, true)
-  local output = run_cmd("retdec-decompiler --keep-library-funcs --output " .. tmp_dc .. " " .. tmp_exe)
+  local cmd = table.concat({
+    "retdec-decompiler",
+    "--mode bin",
+    "--keep-library-funcs",
+    "--cleanup",
+    "-o", tmp_dc,
+    tmp_exe,
+  }, " ")
+  local output = run_cmd(cmd)
   if not vim.loop.fs_stat(tmp_dc) then
     open_window("text")
     vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(output, "\n"))
-    vim.api.nvim_buf_set_name(result_bufnr, name .. "-FullDecompileError")
+    vim.api.nvim_buf_set_name(result_bufnr, name .. "-DecompileError")
     return finalize()
   end
   local dc = run_cmd("cat " .. tmp_dc)
@@ -128,11 +113,9 @@ end
 
 -- Register user commands
 function M.setup()
-  vim.api.nvim_create_user_command("ReCDisasmObj",    M.disasmObj,    {})
-  vim.api.nvim_create_user_command("ReCDisasmExe",    M.disasmExe,    {})
-  vim.api.nvim_create_user_command("ReCDecompileObj", M.decompileObj, {})
+  vim.api.nvim_create_user_command("ReCDisasmObj", M.disasmObj, {})
+  vim.api.nvim_create_user_command("ReCDisasmExe", M.disasmExe, {})
   vim.api.nvim_create_user_command("ReCDecompileExe", M.decompileExe, {})
 end
 
 return M
-
