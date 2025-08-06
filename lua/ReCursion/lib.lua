@@ -59,17 +59,18 @@ function M.disasm()
   finalize()
 end
 
--- Decompile current C file using retdec
+-- Decompile current C file using RetDec (full executable mode)
 function M.decompile()
-  local orig_fname = vim.fn.expand("%:t")
-  local tmp_c  = "/tmp/recursion_code.c"
-  local tmp_o  = "/tmp/recursion_code.o"
-  local tmp_dc = "/tmp/recursion_code_decompiled.c"
+  local orig_fname = vim.fn.expand("%:t:r")
+  local tmp_c   = "/tmp/recursion_code.c"
+  local tmp_exe = "/tmp/recursion_code_exe"
+  local tmp_dc  = "/tmp/recursion_code_decompiled.c"
 
   vim.cmd("write! " .. tmp_c)
-  run_cmd("gcc -c -O0 " .. tmp_c .. " -o " .. tmp_o)
-  run_cmd("retdec-decompiler --keep-library-funcs --output " .. tmp_dc .. " " .. tmp_o)
+  run_cmd("gcc -g -O0 -fno-builtin -o " .. tmp_exe .. " " .. tmp_c)
 
+  run_cmd("retdec-decompiler --keep-library-funcs --output " .. tmp_dc .. " " .. tmp_exe)
+  
   local dc = run_cmd("cat " .. tmp_dc)
 
   open_window("c")
