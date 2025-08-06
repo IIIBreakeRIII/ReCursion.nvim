@@ -1,8 +1,9 @@
+-- lua/ReCursion/lib.lua
 local M = {}
 local result_bufnr, result_winid
 
 -- Run a shell command and capture output
-local function run_cmd(cmd)
+default function run_cmd(cmd)
   local h = io.popen(cmd)
   local out = h:read("*a")
   h:close()
@@ -28,7 +29,7 @@ local function open_window(ft)
   vim.bo[result_bufnr].swapfile   = false
   vim.bo[result_bufnr].modifiable = true
 
-  -- Shortcut to close buffer
+  -- Close buffer shortcut
   vim.keymap.set("n", ";bd", function()
     vim.cmd("bd")
   end, { buffer = result_bufnr, silent = true, noremap = true })
@@ -41,9 +42,9 @@ local function finalize()
   end
 end
 
--- Disassemble current C file (with interleaved source)
-function M.disasm()
-  local orig_fname = vim.fn.expand("%:t")
+-- Disassemble object file (.o) with temp symbols and basic assembly
+function M.disasmObj()
+  local name = vim.fn.expand("%:t:r")
   local tmp_c = "/tmp/recursion_code.c"
   local tmp_o = "/tmp/recursion_code.o"
 
@@ -54,35 +55,33 @@ function M.disasm()
 
   open_window("asm")
   vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(asm, "\n"))
-  vim.api.nvim_buf_set_name(result_bufnr, orig_fname .. "-Disassembly")
+  vim.api.nvim_buf_set_name(result_bufnr, name .. "-ObjDisasm")
 
   finalize()
 end
 
--- Decompile current C file using RetDec (full executable mode)
-function M.decompile()
-  local orig_fname = vim.fn.expand("%:t:r")
+-- Disassemble full linked executable with PLT/GOT (shows external calls)
+function M.disasmExe()
+  local name = vim.fn.expand("%:t:r")
   local tmp_c   = "/tmp/recursion_code.c"
   local tmp_exe = "/tmp/recursion_code_exe"
-  local tmp_dc  = "/tmp/recursion_code_decompiled.c"
 
   vim.cmd("write! " .. tmp_c)
   run_cmd("gcc -g -O0 -fno-builtin -o " .. tmp_exe .. " " .. tmp_c)
 
-  run_cmd("retdec-decompiler --keep-library-funcs --output " .. tmp_dc .. " " .. tmp_exe)
-  
-  local dc = run_cmd("cat " .. tmp_dc)
+  local asm = run_cmd("objdump -d -l -S " .. tmp_exe)
 
-  open_window("c")
-  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(dc, "\n"))
-  vim.api.nvim_buf_set_name(result_bufnr, orig_fname .. "-Decompiled")
+  open_window("asm")
+  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(asm, "\n"))
+  vim.api.nvim_buf_set_name(result_bufnr, name .. "-FullDisasm")
 
   finalize()
 end
 
 function M.setup()
-  vim.api.nvim_create_user_command("ReCDisasm",    M.disasm,    {})
-  vim.api.nvim_create_user_command("ReCDecompile", M.decompile, {})
+  vim.api.nvim_create_user_command("ReCDisasmObj", M.disasmObj, {})
+  vim.api.nvim_create_user_command("ReCDisasmExe", M.disasmExe, {})
 end
 
 return M
+
