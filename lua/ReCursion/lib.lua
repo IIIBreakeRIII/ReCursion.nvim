@@ -48,7 +48,7 @@ function M.disasm()
   local tmp_o = "/tmp/recursion_code.o"
 
   vim.cmd("write! " .. tmp_c)
-  run_cmd("gcc -g -O0 -c " .. tmp_c .. " -o " .. tmp_o)
+  run_cmd("gcc -g -O0 -fno-builtin -c " .. tmp_c .. " -o " .. tmp_o)
 
   local asm = run_cmd("objdump -d -l -S " .. tmp_o)
 
