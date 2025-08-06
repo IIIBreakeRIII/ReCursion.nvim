@@ -111,14 +111,37 @@ function M.decompile()
   -- Read and reconstruct source from tokens
   local raw = run_cmd("cat " .. jsonf)
   local data = vim.fn.json_decode(raw)
-  -- Concatenate tokens and split into lines
-  local combined = table.concat(vim.tbl_map(function(tok) return tok.val end, data.tokens))
+  if not data or type(data.tokens) ~= 'table' or #data.tokens == 0 then
+    open_window("text")
+    vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, {"[error] invalid JSON tokens"})
+    vim.api.nvim_buf_set_name(result_bufnr, fname .. "-DecompileError")
+    finalize()
+    return
+  end
+
+  -- Extract token values safely
+  local vals = {}
+  for _, tok in ipairs(data.tokens) do
+    if tok.val then table.insert(vals, tok.val) end
+  end
+  if #vals == 0 then
+    open_window("text")
+    vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, {"[error] no token values"})
+    vim.api.nvim_buf_set_name(result_bufnr, fname .. "-DecompileError")
+    finalize()
+    return
+  end
+
+  -- Concatenate and split into lines
+  local combined = table.concat(vals)
   local lines = vim.split(combined, "\n", true)
 
   -- Write reconstructed source to file
   local f = io.open(recon, "w")
-  f:write(combined)
-  f:close()
+  if f then
+    f:write(combined)
+    f:close()
+  end
 
   -- Display reconstructed source in Vim
   open_window("c")
