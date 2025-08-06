@@ -1,4 +1,4 @@
-# nvim-ReCursion
+# ReCursion.nvim
 
 A Neovim plugin for disassembling and decompiling C code directly in Neovim.  
 Uses `objdump` for disassembly and `retdec` for decompilation.
@@ -10,7 +10,7 @@ Uses `objdump` for disassembly and `retdec` for decompilation.
 ### Lazy.nvim
 ```lua
 {
-  "USERNAME/nvim-ReCursion",
+  "IIIBreakeRIII/nvim-ReCursion",
   config = function()
     require("ReCursion").setup()
   end,
@@ -20,7 +20,7 @@ Uses `objdump` for disassembly and `retdec` for decompilation.
 ### Packer.nvim
 ```lua
 use {
-  "USERNAME/nvim-ReCursion",
+  "IIIBreakeRIII/nvim-ReCursion",
   config = function()
     require("ReCursion").setup()
   end
