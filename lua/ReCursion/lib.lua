@@ -4,13 +4,13 @@ local result_bufnr, result_winid
 
 -- Run a shell command, capturing stdout and stderr
 local function run_cmd(cmd)
-  local handle = io.popen(cmd .. " 2>&1")
-  local out = handle:read("*a")
-  handle:close()
+  local h = io.popen(cmd .. " 2>&1")
+  local out = h:read("*a")
+  h:close()
   return out
 end
 
--- Open (or reuse) a right-side split buffer for results
+-- Open or reuse a right-side split buffer for results
 local function open_window(ft)
   if result_bufnr and vim.api.nvim_buf_is_valid(result_bufnr)
      and result_winid and vim.api.nvim_win_is_valid(result_winid)
@@ -49,17 +49,15 @@ local function compile_exe(source, exe)
   return run_cmd(cmd)
 end
 
--- Disassemble C code (via full executable and objdump/otool)
+-- Disassemble C code (unchanged)
 function M.disasm()
   local fname = vim.fn.expand("%:t:r")
   local tmp_c   = "/tmp/recursion_code.c"
   local tmp_exe = "/tmp/recursion_code_exe"
 
-  -- save and compile
   vim.cmd("write! " .. tmp_c)
   compile_exe(tmp_c, tmp_exe)
 
-  -- choose tool based on file type
   local info = run_cmd("file " .. tmp_exe)
   local cmd = info:match("Mach%-O")
     and ("otool -tvV " .. tmp_exe)
@@ -72,40 +70,60 @@ function M.disasm()
   finalize()
 end
 
--- Decompile C code using RetDec (full executable mode)
+-- Decompile C code using RetDec (JSON-based reconstruction)
 function M.decompile()
   local fname = vim.fn.expand("%:t:r")
-  local tmp_c   = "/tmp/recursion_code.c"
-  local tmp_exe = "/tmp/recursion_code_exe"
-  local tmp_dc  = "/tmp/recursion_code_decompiled.c"
+  local cwd = vim.fn.getcwd()
+  local workdir = cwd .. "/" .. fname .. "-decompile"
 
-  -- save and compile
-  vim.cmd("write! " .. tmp_c)
-  compile_exe(tmp_c, tmp_exe)
+  -- Create working directory
+  run_cmd("mkdir -p " .. workdir)
 
-  -- run RetDec
+  -- Define paths
+  local src   = workdir .. "/" .. fname .. ".c"
+  local exe   = workdir .. "/" .. fname .. "_exe"
+  local jsonf = workdir .. "/" .. fname .. ".json"
+  local recon = workdir .. "/reconstructed.c"
+
+  -- Save current buffer and compile to executable
+  vim.cmd("write! " .. src)
+  compile_exe(src, exe)
+
+  -- Run RetDec for JSON-human output keeping library calls
   local cmd = table.concat({
     "retdec-decompiler",
     "--mode bin",
-    "--keep-library-funcs",
-    "--cleanup",
-    "-o", tmp_dc,
-    tmp_exe
+    "--backend-keep-library-funcs",
+    "--output-format json-human",
+    "-o", jsonf,
+    exe
   }, " ")
   local out = run_cmd(cmd)
 
-  if not vim.loop.fs_stat(tmp_dc) then
-    -- on error, show retdec output
+  -- Check if JSON file was created
+  if not vim.loop.fs_stat(jsonf) then
     open_window("text")
     vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(out, "\n"))
     vim.api.nvim_buf_set_name(result_bufnr, fname .. "-DecompileError")
     return finalize()
   end
 
-  -- display decompiled C
-  local dc = run_cmd("cat " .. tmp_dc)
+  -- Parse JSON tokens and reconstruct source
+  local raw = run_cmd("cat " .. jsonf)
+  local data = vim.fn.json_decode(raw)
+  local lines = {}
+  for _, tok in ipairs(data.tokens) do
+    table.insert(lines, tok.val)
+  end
+
+  -- Write reconstructed source to file
+  local f = io.open(recon, "w")
+  f:write(table.concat(lines))
+  f:close()
+
+  -- Display reconstructed source in Vim
   open_window("c")
-  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(dc, "\n"))
+  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, lines)
   vim.api.nvim_buf_set_name(result_bufnr, fname .. "-Decompiled")
   finalize()
 end
@@ -117,3 +135,4 @@ function M.setup()
 end
 
 return M
+
