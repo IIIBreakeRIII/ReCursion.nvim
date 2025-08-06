@@ -2,9 +2,10 @@
 local M = {}
 local result_bufnr, result_winid
 
--- Run a shell command and capture output
+-- Run a shell command and capture output (captures stderr as well)
 local function run_cmd(cmd)
-  local h = io.popen(cmd)
+  -- Redirect stderr to stdout for debugging
+  local h = io.popen(cmd .. " 2>&1")
   local out = h:read("*a")
   h:close()
   return out
@@ -51,7 +52,13 @@ function M.disasmObj()
   vim.cmd("write! " .. tmp_c)
   run_cmd("gcc -g -O0 -fno-builtin -c " .. tmp_c .. " -o " .. tmp_o)
 
-  local asm = run_cmd("objdump -d -l -S " .. tmp_o)
+  -- Determine correct disassembly tool: objdump or otool for Mach-O
+  local asm_cmd = "objdump -d -l -S " .. tmp_o
+  local info = run_cmd("file " .. tmp_o)
+  if info:match("Mach%-O") then
+    asm_cmd = "otool -tvV " .. tmp_o
+  end
+  local asm = run_cmd(asm_cmd)
 
   open_window("asm")
   vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(asm, "\n"))
@@ -62,14 +69,20 @@ end
 
 -- Disassemble full linked executable with PLT/GOT (shows external calls)
 function M.disasmExe()
-  local name = vim.fn.expand("%:t:r")
+  local name   = vim.fn.expand("%:t:r")
   local tmp_c   = "/tmp/recursion_code.c"
   local tmp_exe = "/tmp/recursion_code_exe"
 
   vim.cmd("write! " .. tmp_c)
   run_cmd("gcc -g -O0 -fno-builtin -o " .. tmp_exe .. " " .. tmp_c)
 
-  local asm = run_cmd("objdump -d -l -S " .. tmp_exe)
+  -- Determine correct disassembly tool: objdump or otool for Mach-O
+  local asm_cmd = "objdump -d -l -S " .. tmp_exe
+  local info    = run_cmd("file " .. tmp_exe)
+  if info:match("Mach%-O") then
+    asm_cmd = "otool -tvV " .. tmp_exe
+  end
+  local asm = run_cmd(asm_cmd)
 
   open_window("asm")
   vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(asm, "\n"))
@@ -78,7 +91,7 @@ function M.disasmExe()
   finalize()
 end
 
--- Decompile object file (.o) to C using retdec
+-- Decompile object file (.o) to C using RetDec
 function M.decompileObj()
   local name   = vim.fn.expand("%:t:r")
   local tmp_c  = "/tmp/recursion_code.c"
@@ -98,7 +111,7 @@ function M.decompileObj()
   finalize()
 end
 
--- Decompile full executable to C using retdec
+-- Decompile full executable to C using RetDec
 function M.decompileExe()
   local name   = vim.fn.expand("%:t:r")
   local tmp_c  = "/tmp/recursion_code.c"
