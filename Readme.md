@@ -1,6 +1,6 @@
 # ReCursion.nvim
 
-A Neovim plugin for disassembling and decompiling C code directly in Neovim.  
+A Neovim plugin for disassembling and decompiling C code directly in Neovim.\
 Uses `objdump` for disassembly and `retdec` for decompilation.
 
 ---
@@ -8,9 +8,10 @@ Uses `objdump` for disassembly and `retdec` for decompilation.
 ## 📦 Installation
 
 ### Lazy.nvim
+
 ```lua
 {
-  "IIIBreakeRIII/nvim-ReCursion",
+  "IIIBreakeRIII/ReCursion.nvim",
   config = function()
     require("ReCursion").setup()
   end,
@@ -18,41 +19,54 @@ Uses `objdump` for disassembly and `retdec` for decompilation.
 ```
 
 ### Packer.nvim
+
 ```lua
 use {
-  "IIIBreakeRIII/nvim-ReCursion",
+  "IIIBreakeRIII/ReCursion.nvim",
   config = function()
     require("ReCursion").setup()
-  end
+  end,
 }
 ```
 
+---
+
 ## ⚡ Requirements
+
 - `gcc` (for compilation with debug symbols)
 - `objdump` (for assembly output)
-- `retdec` (for C decompilation)
+- `retdec` (for C decompilation, requires `retdec-decompiler` CLI)
 
-Ensure these are available in your PATH.
+Ensure these are available in your `PATH`.
+
+---
 
 ## 🚀 Usage
 
-> **Disassemble current C file**
-```
+```vim
+" Disassemble current C file
 :ReCDisasm
-```
-> **Decompile current C file**
-```
+
+" Decompile current C file
 :ReCDecompile
-```
-> **Close Buffer**
-```
+
+" Close result buffer
 ;bd
 ```
 
 The output opens in a vertical split with syntax highlighting.
 
+---
+
 ## 📂 How It Works
-1.	Saves the current buffer to /tmp/recursion_code.c
-2.	Compiles with -g -O0 to preserve debug info
-3.	Runs objdump (disassembly) or retdec (decompilation)
-4.	Displays results in a scratch buffer in Neovim
+
+1. Saves the current buffer to `/tmp/recursion_code.c`.
+2. Compiles with `-g -O0 -fno-builtin` to preserve debug info and disable built-ins.
+3. Runs `objdump -d -l -S` (or `otool -tvV` on macOS) for disassembly, or `retdec-decompiler` for decompilation in JSON-human mode.
+4. Reconstructs and displays results in a scratch buffer inside Neovim.
+
+---
+
+## 📜 License
+
+MIT
