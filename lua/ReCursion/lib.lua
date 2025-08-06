@@ -13,8 +13,7 @@ end
 -- Open or reuse a right-side split buffer for results
 local function open_window(ft)
   if result_bufnr and vim.api.nvim_buf_is_valid(result_bufnr)
-     and result_winid and vim.api.nvim_win_is_valid(result_winid)
-  then
+     and result_winid and vim.api.nvim_win_is_valid(result_winid) then
     vim.api.nvim_set_current_win(result_winid)
     vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, {})
   else
@@ -105,20 +104,20 @@ function M.decompile()
     open_window("text")
     vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(out, "\n"))
     vim.api.nvim_buf_set_name(result_bufnr, fname .. "-DecompileError")
-    return finalize()
+    finalize()
+    return
   end
 
-  -- Parse JSON tokens and reconstruct source
+  -- Read and reconstruct source from tokens
   local raw = run_cmd("cat " .. jsonf)
   local data = vim.fn.json_decode(raw)
-  local lines = {}
-  for _, tok in ipairs(data.tokens) do
-    table.insert(lines, tok.val)
-  end
+  -- Concatenate tokens and split into lines
+  local combined = table.concat(vim.tbl_map(function(tok) return tok.val end, data.tokens))
+  local lines = vim.split(combined, "\n", true)
 
   -- Write reconstructed source to file
   local f = io.open(recon, "w")
-  f:write(table.concat(lines))
+  f:write(combined)
   f:close()
 
   -- Display reconstructed source in Vim
