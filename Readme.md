@@ -28,23 +28,23 @@ use {
 ```
 
 ## ⚡ Requirements
-- gcc (for compilation with debug symbols)
-- objdump (for assembly output)
-- retdec (for C decompilation)
+- `gcc` (for compilation with debug symbols)
+- `objdump` (for assembly output)
+- `retdec` (for C decompilation)
 
 Ensure these are available in your PATH.
 
 ## 🚀 Usage
 
-- Disassemble current C file
+> **Disassemble current C file**
 ```
 :ReCDisasm
 ```
-- Decompile current C file
+> **Decompile current C file**
 ```
 :ReCDecompile
 ```
-- Close Buffer
+> **Close Buffer**
 ```
 ;bd
 ```
