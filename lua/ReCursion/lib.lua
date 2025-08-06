@@ -68,7 +68,7 @@ function M.decompile()
 
   vim.cmd("write! " .. tmp_c)
   run_cmd("gcc -c -O0 " .. tmp_c .. " -o " .. tmp_o)
-  run_cmd("retdec-decompiler --output " .. tmp_dc .. " " .. tmp_o)
+  run_cmd("retdec-decompiler --keep-library-funcs --output " .. tmp_dc .. " " .. tmp_o)
 
   local dc = run_cmd("cat " .. tmp_dc)
 
