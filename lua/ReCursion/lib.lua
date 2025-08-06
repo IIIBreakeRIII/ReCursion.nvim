@@ -48,23 +48,50 @@ local function compile_exe(source, exe)
   return run_cmd(cmd)
 end
 
--- Disassemble C code (unchanged)
+-- Disassemble C code and annotate source-to-assembly mapping
 function M.disasm()
   local fname = vim.fn.expand("%:t:r")
-  local tmp_c   = "/tmp/recursion_code.c"
-  local tmp_exe = "/tmp/recursion_code_exe"
+  local cwd = vim.fn.getcwd()
+  local workdir = cwd .. "/" .. fname .. "-decompile"
+  run_cmd("mkdir -p " .. workdir)
 
+  local tmp_c   = workdir .. "/" .. fname .. ".c"
+  local tmp_exe = workdir .. "/" .. fname .. "_exe"
+
+  -- save and compile
   vim.cmd("write! " .. tmp_c)
   compile_exe(tmp_c, tmp_exe)
 
+  -- choose disassembler
   local info = run_cmd("file " .. tmp_exe)
   local cmd = info:match("Mach%-O")
     and ("otool -tvV " .. tmp_exe)
     or ("objdump -d -l -S " .. tmp_exe)
 
+  -- run disassembly
   local asm = run_cmd(cmd)
+  local lines_tbl = vim.split(asm, "\n")
+
+  -- open buffer and set assembly lines
   open_window("asm")
-  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(asm, "\n"))
+  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, lines_tbl)
+
+  -- annotate mapping: for each source comment, attach the following instruction address
+  local ns = vim.api.nvim_create_namespace("ReCursionMapping")
+  for idx, line in ipairs(lines_tbl) do
+    local src_ln = line:match"; [^:]+:(%d+)"
+    if src_ln then
+      local instr = lines_tbl[idx+1] or ""
+      local addr = instr:match"^%s*([%w]+):"
+      if addr then
+        vim.api.nvim_buf_set_extmark(result_bufnr, ns, idx-1, 0, {
+          virt_text = {{"→ " .. addr, "Comment"}},
+          virt_text_pos = "eol",
+        })
+      end
+    end
+  end
+
   vim.api.nvim_buf_set_name(result_bufnr, fname .. "-Disassembly")
   finalize()
 end
@@ -74,21 +101,17 @@ function M.decompile()
   local fname = vim.fn.expand("%:t:r")
   local cwd = vim.fn.getcwd()
   local workdir = cwd .. "/" .. fname .. "-decompile"
-
-  -- Create working directory
   run_cmd("mkdir -p " .. workdir)
 
-  -- Define paths
   local src   = workdir .. "/" .. fname .. ".c"
   local exe   = workdir .. "/" .. fname .. "_exe"
   local jsonf = workdir .. "/" .. fname .. ".json"
-  local recon = workdir .. "/reconstructed.c"
 
-  -- Save current buffer and compile to executable
+  -- save and compile
   vim.cmd("write! " .. src)
   compile_exe(src, exe)
 
-  -- Run RetDec for JSON-human output keeping library calls
+  -- run RetDec for JSON-human output keeping library calls
   local cmd = table.concat({
     "retdec-decompiler",
     "--mode bin",
@@ -99,7 +122,6 @@ function M.decompile()
   }, " ")
   local out = run_cmd(cmd)
 
-  -- Check if JSON file was created
   if not vim.loop.fs_stat(jsonf) then
     open_window("text")
     vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(out, "\n"))
@@ -108,42 +130,30 @@ function M.decompile()
     return
   end
 
-  -- Read and reconstruct source from tokens
   local raw = run_cmd("cat " .. jsonf)
   local data = vim.fn.json_decode(raw)
-  if not data or type(data.tokens) ~= 'table' or #data.tokens == 0 then
+  if not data or type(data.tokens) ~= "table" then
     open_window("text")
-    vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, {"[error] invalid JSON tokens"})
+    vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, {"[error] invalid JSON"})
     vim.api.nvim_buf_set_name(result_bufnr, fname .. "-DecompileError")
     finalize()
     return
   end
 
-  -- Extract token values safely
   local vals = {}
   for _, tok in ipairs(data.tokens) do
     if tok.val then table.insert(vals, tok.val) end
   end
-  if #vals == 0 then
-    open_window("text")
-    vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, {"[error] no token values"})
-    vim.api.nvim_buf_set_name(result_bufnr, fname .. "-DecompileError")
-    finalize()
-    return
-  end
 
-  -- Concatenate and split into lines
   local combined = table.concat(vals)
   local lines = vim.split(combined, "\n", true)
 
-  -- Write reconstructed source to file
+  -- write reconstructed source
+  local recon = workdir .. "/reconstructed.c"
   local f = io.open(recon, "w")
-  if f then
-    f:write(combined)
-    f:close()
-  end
+  if f then f:write(combined); f:close() end
 
-  -- Display reconstructed source in Vim
+  -- display in vim
   open_window("c")
   vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, lines)
   vim.api.nvim_buf_set_name(result_bufnr, fname .. "-Decompiled")
