@@ -3,7 +3,7 @@ local M = {}
 local result_bufnr, result_winid
 
 -- Run a shell command and capture output
-default function run_cmd(cmd)
+local function run_cmd(cmd)
   local h = io.popen(cmd)
   local out = h:read("*a")
   h:close()
