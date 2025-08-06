@@ -78,9 +78,51 @@ function M.disasmExe()
   finalize()
 end
 
+-- Decompile object file (.o) to C using retdec
+function M.decompileObj()
+  local name   = vim.fn.expand("%:t:r")
+  local tmp_c  = "/tmp/recursion_code.c"
+  local tmp_o  = "/tmp/recursion_code.o"
+  local tmp_dc = "/tmp/recursion_code_obj_decompiled.c"
+
+  vim.cmd("write! " .. tmp_c)
+  run_cmd("gcc -g -O0 -fno-builtin -c " .. tmp_c .. " -o " .. tmp_o)
+  run_cmd("retdec-decompiler --keep-library-funcs --output " .. tmp_dc .. " " .. tmp_o)
+
+  local dc = run_cmd("cat " .. tmp_dc)
+
+  open_window("c")
+  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(dc, "\n"))
+  vim.api.nvim_buf_set_name(result_bufnr, name .. "-ObjDecompiled")
+
+  finalize()
+end
+
+-- Decompile full executable to C using retdec
+function M.decompileExe()
+  local name   = vim.fn.expand("%:t:r")
+  local tmp_c  = "/tmp/recursion_code.c"
+  local tmp_exe= "/tmp/recursion_code_exe"
+  local tmp_dc = "/tmp/recursion_code_exe_decompiled.c"
+
+  vim.cmd("write! " .. tmp_c)
+  run_cmd("gcc -g -O0 -fno-builtin -o " .. tmp_exe .. " " .. tmp_c)
+  run_cmd("retdec-decompiler --keep-library-funcs --output " .. tmp_dc .. " " .. tmp_exe)
+
+  local dc = run_cmd("cat " .. tmp_dc)
+
+  open_window("c")
+  vim.api.nvim_buf_set_lines(result_bufnr, 0, -1, false, vim.split(dc, "\n"))
+  vim.api.nvim_buf_set_name(result_bufnr, name .. "-FullDecompiled")
+
+  finalize()
+end
+
 function M.setup()
-  vim.api.nvim_create_user_command("ReCDisasmObj", M.disasmObj, {})
-  vim.api.nvim_create_user_command("ReCDisasmExe", M.disasmExe, {})
+  vim.api.nvim_create_user_command("ReCDisasmObj",     M.disasmObj,     {})
+  vim.api.nvim_create_user_command("ReCDisasmExe",     M.disasmExe,     {})
+  vim.api.nvim_create_user_command("ReCDecompileObj",  M.decompileObj,  {})
+  vim.api.nvim_create_user_command("ReCDecompileExe",  M.decompileExe,  {})
 end
 
 return M
